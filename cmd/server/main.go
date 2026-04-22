@@ -49,6 +49,7 @@ func main() {
 	authSvc := auth.NewService(jwtSecret)
 	authHandler := handlers.NewAuthHandler(db, authSvc)
 	nodeHandler := handlers.NewNodeHandler(db)
+	tokenHandler := handlers.NewInstallTokenHandler(db)
 
 	// Router
 	r := gin.Default()
@@ -64,6 +65,7 @@ func main() {
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
 		api.POST("/agent/register", nodeHandler.AgentRegister)
+		api.POST("/agent/register/token", tokenHandler.AgentRegisterWithToken)
 
 		agentAuth := api.Group("/agent")
 		agentAuth.Use(middleware.AgentAuthMiddleware())
@@ -79,6 +81,9 @@ func main() {
 	{
 		protected.GET("/nodes", nodeHandler.List)
 		protected.GET("/nodes/unclaimed", nodeHandler.ListUnclaimed)
+		protected.POST("/install-tokens", tokenHandler.Create)
+		protected.GET("/install-tokens", tokenHandler.List)
+		protected.DELETE("/install-tokens/:id", tokenHandler.Delete)
 		protected.POST("/nodes/:id/claim", nodeHandler.Claim)
 		protected.GET("/nodes/:id", nodeHandler.Get)
 		protected.GET("/nodes/:id/metrics", nodeHandler.GetMetrics)
@@ -162,6 +167,16 @@ func migrate(db *sql.DB) error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_node_discovery_node_id ON node_discovery(node_id);
+
+	CREATE TABLE IF NOT EXISTS install_tokens (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		token TEXT UNIQUE NOT NULL,
+		max_uses INTEGER NOT NULL DEFAULT 2,
+		uses INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL,
+		expires_at DATETIME
+	);
 	`
 	_, err := db.Exec(schema)
 	return err
